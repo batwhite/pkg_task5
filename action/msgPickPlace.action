@@ -1,0 +1,11 @@
+# goal
+string message
+---
+# result
+string result
+bool success
+int8 state
+---
+# feedback
+string result
+int8 state
