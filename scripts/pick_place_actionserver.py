@@ -340,14 +340,14 @@ class place:
     def get_time_str(self):
             timestamp = int(time.time())
             value = datetime.datetime.fromtimestamp(timestamp)
-            str_time = value.strftime('%Y-%m-%d %H:%M:%S')
+            str_time = value.strftime("%d/%m/%Y %H:%M:%S")
             return str_time
 
     def estimated_time_delivery(self,item):
 
         today = datetime.date.today()
         estimated = today + datetime.timedelta(days = self.delivery_time[item])
-        str_time = estimated.strftime('%Y-%m-%d')
+        str_time = estimated.strftime('%d/%m/%Y')
 
         return str_time
 
@@ -667,7 +667,7 @@ class pick_actionserver:
                 for j in stored_info:
                     i=i+1
 
-                    parameters[i] = {'id':'Inventory','Team Id':'VB#0620','Unique Id':'FAAMAMYU','SKU':stored_info[j][0]+str(j),'Item':self.item[str(stored_info[j])],'Priority':self.priority[stored_info[j]],'Storage Number':'R'+str(int(j[0])-1)
+                    parameters[i] = {'id':'Inventory','Team Id':'VB#0620','Unique Id':'FAAMAMYU','SKU':stored_info[j][0].upper()+str(j)+self.sku(),'Item':self.item[str(stored_info[j])],'Priority':self.priority[stored_info[j]],'Storage Number':'R'+str(int(j[0])-1)
                     +' '
                     +'C'+str(int(j[1])-1),
                     "Cost":self.cost[stored_info[j]],"Quantity":'1'}
@@ -820,7 +820,14 @@ class pick_actionserver:
 
         timestamp = int(time.time())
         value = datetime.datetime.fromtimestamp(timestamp)
-        str_time = value.strftime('%Y-%m-%d %H:%M:%S')
+        str_time = value.strftime("%d/%m/%Y %H:%M:%S")
+
+        return str_time
+    def sku(self):
+
+        timestamp = int(time.time())
+        value = datetime.datetime.fromtimestamp(timestamp)
+        str_time = value.strftime("%m%Y")
 
         return str_time
 

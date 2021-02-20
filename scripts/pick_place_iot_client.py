@@ -6,6 +6,8 @@ import rospy
 import actionlib
 import threading
 import json
+import datetime
+import time
 
 from pkg_ros_iot_bridge.msg import msgRosIotAction  # Message Class that is used by ROS Actions internally
 from pkg_ros_iot_bridge.msg import msgRosIotGoal    # Message Class that is used for Goal Messages
@@ -86,7 +88,12 @@ class ActionClient:
 
         # self._goal_handles2.update({self.count2:goal_handle})
         # self._goal_info.update({self.count2:goal.message})
+    def get_time_str(self):
 
+        timestamp = int(time.time())
+        value = datetime.datetime.fromtimestamp(timestamp)
+        str_time = value.strftime("%d/%m/%Y %H:%M:%S")
+        return str_time
 
     def func_callback_msgMqttSub(self,msg):
 
@@ -96,7 +103,7 @@ class ActionClient:
 
         feed = msgPickPlaceFeedback()
         feed.state = 1
-        parameters = {'id':'IncomingOrders','Team Id':'VB#0620','Unique Id':'FAAMAMYU','Order ID':x['order_id'],'Order Date and Time':x['order_time'],'Item':x['item'],'Priority':self.priority[self.colour[x['item']]],
+        parameters = {'id':'IncomingOrders','Team Id':'VB#0620','Unique Id':'FAAMAMYU','Order ID':x['order_id'],'Order Date and Time':self.get_time_str(),'Item':x['item'],'Priority':self.priority[self.colour[x['item']]],
         "Order Quantity":'1','City':x['city'],'Longitude':x['lon'],'Latitude':x['lat'],'Cost':self.cost[self.colour[x['item']]]}
 
         feed.result = json.dumps(parameters)
