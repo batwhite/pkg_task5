@@ -11,6 +11,7 @@ import time
 import rospkg
 import yaml
 import json
+import datetime
 
 import cv2
 
@@ -284,19 +285,17 @@ class place:
         self._robot_ns = '/'  + arg_robot_name
         self._planning_group = "manipulator"
 
-        self._sas = actionlib.ActionServer('/action_place',
-                                         msgPickPlaceAction,
-                                         self.func_on_rx_goal,
-                                         self.func_on_cancel,
-                                         auto_start=False)
-        self._sas.start()
+        self._sas = actionlib.SimpleActionClient('/action_place',
+                                         msgPickPlaceAction)
+        
+        rospy.loginfo('waiting for place action server')
 
         rospy.loginfo('Started Place Action Server')
         self.colour={'Medicine':'red','Food':'yellow','Clothes':'green'}
         self.item={'red':'Medicine','yellow':'Food','green':'Clothes'}
         self.priority={'red':'HP','yellow':'MP','green':'LP'}
         self.cost={'red':450,'yellow':250,'green':150}
-
+        self.delivery_time = {'Medicine':1,'Food':3,'Clothes':5}
         self._commander = moveit_commander.roscpp_initialize(sys.argv)
         self._tfBuffer = tf2_ros.Buffer()
         self._listener = tf2_ros.TransformListener(self._tfBuffer)
@@ -336,16 +335,26 @@ class place:
 
     def func_on_cancel(self, goal_handle):
         rospy.loginfo("Received cancel request.")
-        goal_id = goal_handle.get_goal_id()
+        # goal_id = goal_handle.get_goal_id()
 
+    def get_time_str(self):
+            timestamp = int(time.time())
+            value = datetime.datetime.fromtimestamp(timestamp)
+            str_time = value.strftime('%Y-%m-%d %H:%M:%S')
+            return str_time
 
-    def func_on_rx_goal(self, goal_handle):
+    def estimated_time_delivery(self,item):
 
-        self._goal_handle=goal_handle
-        goal = goal_handle.get_goal()
-        self.x = json.loads(goal.message)
-        rospy.loginfo('Recieved new goal from place action client')
-        self._goal_handle.set_accepted()
+        today = datetime.date.today()
+        estimated = today + datetime.timedelta(days = self.delivery_time[item])
+        str_time = estimated.strftime('%Y-%m-%d')
+
+        return str_time
+
+    # def func_on_rx_goal(self, goal):
+
+    #     self.x = json.loads(goal.message)
+    #     print('goal accepted from place action client', self.x)
 
         # parameters = {'id':'OrdersShipped','Team ID':'Vb#0620','Unique Id':'FAAMAMYU','Order ID':x['order_id'],'Shipped Date and Time':x['order_time'],'Item':x['item'],'Priority':self.priority[self.colour[x['item']]],
         # "Shipped Quantity":'1','City':x['city'],'Cost':self.cost[self.colour[x['item']]],'Shipped Status':'Yes'}
@@ -355,7 +364,7 @@ class place:
     def box_sorter(self,box_id,new_pose_infox,new_pose_infoy):
 
         ee_pose=self._group.get_current_pose().pose
-
+    
         #to get the distance the EE should move to grasp the box
         trans_x=ee_pose.position.x-new_pose_infox
         trans_y=ee_pose.position.y-new_pose_infoy
@@ -370,16 +379,16 @@ class place:
         print(boolv)
 
         results = msgPickPlaceResult()
-
-        print('printing x',self.x)
-        parameter = {'id':'OrdersShipped','Team Id':'VB#0620','Unique Id':'FAAMAMYU','Order ID':self.x['Order ID'],'Item':self.x['Item'],'Priority':self.priority[self.colour[self.x['Item']]],
-        "Shipped Quantity":'1','City':self.x['City'],'Cost':self.cost[self.colour[self.x['Item']]],'Shipped Status':'Yes'}
-        parameters = json.dumps(parameter)
-        print('paraaaaaaaaaaaaaaaaaaaaaa',parameters)
+        y = sorted(self.x)
+        x = self.x[y[0]]
+        self.x.pop(y[0])
+        print('printing x',x)
         #check the diffrent boxes and put them into their respective bins and then return to the home position
         if box_id=='red':
 
-            self.hard_ee_cartesian_translation((0.044638+0.7),(0.713571-0.3),0,0.7,5)
+            # self.hard_ee_cartesian_translation((0.044638+0.7),(0.713571-0.3),0,0.7,5)
+            lst_joint_angles_1 = [-1.4925768075228811, -2.290621254092094, -1.296816231494799, -1.1248335293912657, 1.5712629130319442, -1.4927827292724123]
+            self.hard_set_joint_angles(lst_joint_angles_1,5)
 
             self.attach_detach_gazebo('detach')
 
@@ -405,18 +414,23 @@ class place:
 
             self.attach_detach_gazebo('detach')
 
-        results.result = parameters
-        results.state = 3
-        results.success = True
-        print('resultsssssssssssssssssssssssssssss',results)
+        # results.result = parameters
+        # results.state = 3
+        # results.success = True
+        parameter = {'id':'OrdersShipped','Team Id':'VB#0620','Unique Id':'FAAMAMYU','Order ID':x['Order ID'],'Item':x['Item'],'Priority':self.priority[self.colour[x['Item']]],
+        "Shipped Quantity":'1','City':x['City'],'Cost':self.cost[self.colour[x['Item']]],'Shipped Status':'Yes','Shipped Date and Time':self.get_time_str(),'Estimated Time of Delivery': self.estimated_time_delivery(x['Item'])}
+        parameters = json.dumps(parameter)
+        print('paraaaaaaaaaaaaaaaaaaaaaa',parameters)
 
-
-        self._goal_handle.set_succeeded(results)
-
+        goal = msgPickPlaceGoal()
+        goal.message = parameters
+        self._sas.send_goal(goal,done_cb = self.done_callback)
+        print('resultsssssssssssssssssssssssssssss',goal)
         lst_joint_angles_1 = [0.13683998732796088, -2.4423682116751824, -1.0174361654883883, -1.2520121813310645, 1.57071913195598, 0.13659848941419117]
         self.hard_set_joint_angles(lst_joint_angles_1,5)
 
-
+    def done_callback(self,status,result):
+        print('the goal is done',result)
 
 
     #camera callback function for the Logical camera messages
@@ -596,7 +610,7 @@ class pick_actionserver:
 
     def __init__(self):
 
-
+        
         self._as = actionlib.SimpleActionServer('/action_pick',
                                           msgPickPlaceAction,
                                           execute_cb=self.on_goal,
@@ -607,11 +621,8 @@ class pick_actionserver:
         self.camera_info = cam.store
         self.ur5_1=pick('ur5_1')
         self.ur5_2=place('ur5_2',self.stored_in)
-        lst_joint_angles_1 = [0.13683998732796088, -2.4423682116751824, -1.0174361654883883, -1.2520121813310645, 1.57071913195598, 0.13659848941419117]
-
-        self.ur5_1.hard_set_joint_angles(lst_joint_angles_1,5)
-        self.ur5_2.hard_set_joint_angles(lst_joint_angles_1,5)
-
+        
+        self.count_x = 0
         self.count = 0
         self.goal_info = {}
         self._goal_handles = {}
@@ -624,7 +635,6 @@ class pick_actionserver:
 
     def on_cancel(self, goal_handle):
         rospy.loginfo("Received cancel request.")
-        goal_id = goal_handle.get_goal_id()
         goal_handle.set_cancelled()
         lst_joint_angles_1 = [0.13683998732796088, -2.4423682116751824, -1.0174361654883883, -1.2520121813310645, 1.57071913195598, 0.13659848941419117]
 
@@ -668,15 +678,17 @@ class pick_actionserver:
                 feed.success = True
 
                 self._as.set_succeeded(feed)
+                
+                lst_joint_angles_1 = [0.13683998732796088, -2.4423682116751824, -1.0174361654883883, -1.2520121813310645, 1.57071913195598, 0.13659848941419117]
+
+                self.ur5_1.hard_set_joint_angles(lst_joint_angles_1,5)
+                self.ur5_2.hard_set_joint_angles(lst_joint_angles_1,5)
 
         else:
 
 
 
-            parameters = {'id':'OrdersDispatched','Team Id':'VB#0620','Unique Id':'FAAMAMYU','Order ID':x['order_id'],'Dispatch Date and Time':x['order_time'],'Item':x['item'],'Priority':self.priority[self.colour[x['item']]],
-            "Dispatch Quantity":'1','City':x['city'],'Longitude':x['lon'],'Latitude':x['lat'],'Cost':self.cost[self.colour[x['item']]],'Dispatch Status':'Yes'}
-
-            parameters = json.dumps(parameters)
+            
 
             items=['package21','package02','package01','package10','package11','package12','package22','package20','package00']
 
@@ -711,19 +723,15 @@ class pick_actionserver:
 
             self.ur5_1.key_play1(key)
 
-            if self._as.is_new_goal_available():
+            
+            self.ur5_1.key_play2(key)
 
-                rospy.logwarn('New goal is availiable with higher priority')
-                lst_joint_angles_1 = [0.13683998732796088, -2.4423682116751824, -1.0174361654883883, -1.2520121813310645, 1.57071913195598, 0.13659848941419117]
+            parameters = {'id':'OrdersDispatched','Team Id':'VB#0620','Unique Id':'FAAMAMYU','Order ID':x['order_id'],'Item':x['item'],'Priority':self.priority[self.colour[x['item']]],
+            "Dispatch Quantity":'1','City':x['city'],'Longitude':x['lon'],'Latitude':x['lat'],'Cost':self.cost[self.colour[x['item']]],'Dispatch Status':'Yes','Dispatch Date and Time':self.get_time_str()}
+            self.count_x = self.count_x + 1
+            self.ur5_2.x.update({self.count_x:parameters})
 
-                self.ur5_1.hard_set_joint_angles(lst_joint_angles_1,5)
-
-                self._as.accept_new_goal()
-                return
-            else:
-                self.ur5_1.key_play2(key)
-
-
+            parameters = json.dumps(parameters)
 
             self.camera_info[self.colour[x['item']]].remove(key)
             # self.goal_info.pop(self.count)
@@ -807,6 +815,15 @@ class pick_actionserver:
             #                 result.state = 2
             #                 self._goal_handles[i].set_succeeded(result)
         print('goal completed by pick action server')
+
+    def get_time_str(self):
+
+        timestamp = int(time.time())
+        value = datetime.datetime.fromtimestamp(timestamp)
+        str_time = value.strftime('%Y-%m-%d %H:%M:%S')
+
+        return str_time
+
 # class place_actionserver():
 #
 #     def __init__ (self):

@@ -13,10 +13,10 @@
 
     <!-- node to control ur5_1 -->
     <node name= "node_action_server_ros_iot_bridge" pkg= "pkg_ros_iot_bridge" type="node_action_server_ros_iot_bridge.py" output="screen"/>
+    <node name= "node_pick_place_iot_client" pkg= "pkg_task5" type="pick_place_iot_client.py" output="screen"/>
 
     <!-- node to control ur5_2 -->
     <node name= "pick_place_actionserver" pkg= "pkg_task5" type="pick_place_actionserver.py" output="screen"/>
 
-    <node name= "node_pick_place_iot_client" pkg= "pkg_task5" type="pick_place_iot_client.py" output="screen"/>
-
+    
 </launch>

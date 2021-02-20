@@ -22,13 +22,15 @@ class ActionClient:
     # Class Constructor
     def __init__(self):
 
+        rospy.init_node('node_pick_place_iot_client')
+
         self._ac1 = actionlib.ActionClient('/action_ros_iot', msgRosIotAction)
 
         self._ac2 = actionlib.SimpleActionClient('/action_pick', msgPickPlaceAction)
 
-        self._ac3 = actionlib.ActionClient('/action_place',msgPickPlaceAction)
-
-        rospy.init_node('node_pick_place_iot_client')
+        self._ac3 = actionlib.SimpleActionServer('/action_place',msgPickPlaceAction,execute_cb = self.on_goal,auto_start=False)
+        
+        
 
         self._goal_handles1 = {}
 
@@ -57,7 +59,7 @@ class ActionClient:
         self.priority={'red':'HP','yellow':'MP','green':'LP'}
         self.cost={'red':450,'yellow':250,'green':150}
 
-        self._ac3.wait_for_server()
+        self.processing_goal_place = ''
 
         self._processing_goal = ''
 
@@ -80,6 +82,7 @@ class ActionClient:
 
         self.count2 = self.count2 + 1
         self._goal_info.update({self.count2:goal.message})
+        self._ac3.start()
 
         # self._goal_handles2.update({self.count2:goal_handle})
         # self._goal_info.update({self.count2:goal.message})
@@ -131,12 +134,11 @@ class ActionClient:
 
             for i in range(len(y)-1):
                 next_goal = json.loads(self._goal_info[y[i+1]])
-                index = i
+                
                 print('inside the for loop',self._goal_info)
                 if self.cost[self.colour[next_goal['item']]] > self.cost[self.colour[self._largest_goal['item']]]:
                     self._largest_goal = next_goal
                     # self._largest_goal_handle = self._goal_handles2[y[i+1]]
-                    index = i+1
 
             # if self.cost[self.colour[self._largest_goal['item']]] > self.cost[self.colour[curr_goal['item']]]:
                 # self._processing_goal_handle.cancel()
@@ -193,24 +195,21 @@ class ActionClient:
                 y = sorted(self._goal_info)
                 if self._goal_info != {}:
                     self.check_goal_pick_place(self._goal_info[y[0]])
-                self.send_goal_place(result)
                 self.send_goal_iot(result)
 
+    # def feedback2(self,goal_handle,feedback):
+
+    #     for i in self._goal_handles2:
+    #         if self._goal_handles2[i] == goal_handle:
+    #             index = i
+    #             break
+    #     rospy.loginfo("Feedback Callback. Client Goal Handle #: " + str(index))
 
 
-    def feedback2(self,goal_handle,feedback):
-
-        for i in self._goal_handles2:
-            if self._goal_handles2[i] == goal_handle:
-                index = i
-                break
-        rospy.loginfo("Feedback Callback. Client Goal Handle #: " + str(index))
-
-
-        self.send_goal_iot(feedback)
+    #     self.send_goal_iot(feedback)
 
     def send_goal_iot(self,msg):
-
+        print('this is send goal iot',msg)
         goal = msgRosIotGoal()
 
         goal.message = msg.result
@@ -261,143 +260,95 @@ class ActionClient:
                 rospy.loginfo("Goal successfully completed. IOT Client Goal Handle #: " + str(index))
             else:
                 rospy.loginfo("IOT Goal failed. Client Goal Handle #: " + str(index))
-            #rospy.sleep(5)
+            
+    # def send_goal_place(self,msg):
 
-    # def on_transition2(self,goal_handle):
-    #
-    #     result = msgPickPlaceResult()
-    #     print(goal_handle,type(goal_handle))
+    #     goal = msgPickPlaceGoal()
+    #     print('msg in send_goal_place', msg)
+    #     goal.message = msg.result
+
+    #     if self._goal_handles3 == {}:
+
+    #         goal_handle=self._ac3.send_goal(goal,done_cb = self.done_callback3)
+    #         self.processing_goal_place = msg
+    #         self.count3 = self.count3 + 1
+    #         self._goal_handles3.update({str(self.count3):msg})  
+    #     else:
+
+    #         self.count3 = self.count3 + 1
+    #         self._goal_handles3.update({str(self.count3):msg})
+
+    # def done_callback3(self,status,result):
     #     index = 0
-    #     for i in self._goal_handles2:
-    #         if self._goal_handles2[i] == goal_handle:
+    #     for i in self._goal_handles3:
+    #         if self._goal_handles3[i] == self.processing_goal_place:
     #             index = i
     #             break
-    #
-    #     rospy.loginfo("Transition Callback.From pick action Client Goal Handle #: " + str(index))
-    #     rospy.loginfo("Comm. State: pick action client " + str(goal_handle.get_comm_state()) )
-    #     rospy.loginfo("Goal Status: pick action client " + str(goal_handle.get_goal_status()) )
-    #
+    #     self._goal_handles3.pop(index)
+    #     rospy.loginfo('The goal has been completed by the pick simple action server')
+
+    #     rospy.loginfo(result)
+    #     y = sorted(self._goal_handles3)
+    #     self.send_goal_iot(result)
+    #     if self._goal_handles3 != {}:
+    #         self.check_goal_pick_place(self._goal_handles3[y[0]])
+
+    def on_goal(self,goal):
+        print("new goal recieved from place action server",goal)
+        res = msgPickPlaceResult()
+        res.result = goal.message
+        res.state = 1
+        res.success = True
+        self.send_goal_iot(res)
+        self._ac3.set_succeeded(res)
+    # def on_transition3(self,goal_handle):
+
+    #     result = msgPickPlaceResult()
+
+    #     index = 0
+    #     for i in self._goal_handles3:
+    #         if self._goal_handles3[i] == goal_handle:
+    #             index = i
+    #             break
+
+    #     rospy.loginfo("Transition Callback. from place action Client Goal Handle #: " + str(index))
+    #     rospy.loginfo("Comm. State:PL " + str(goal_handle.get_comm_state()) )
+    #     rospy.loginfo("Goal Status:PL " + str(goal_handle.get_goal_status()) )
+
     #     # Comm State - Monitors the State Machine of the Client which is different from Server's
     #     # Comm State = 2 -> Active
     #     # Comm State = 3 -> Wating for Result
     #     # Comm State = 7 -> Done
-    #
+
     #     # if (Comm State == ACTIVE)
     #     if goal_handle.get_comm_state() == 2:
-    #         rospy.loginfo(str(index) + ": Goal just went active. in pick action server")
-    #
-    #     if goal_handle.get_comm_state() == 3:
-    #         self._processing_goal_handle = self._goal_handles2[index]
-    #         self._processing_goal = self._goal_info[index]
-    #         print('current_processing goal',self._processing_goal)
-    #
+    #         rospy.loginfo(str(index) + ": PL Goal just went active.")
+
     #     # if (Comm State == DONE)
     #     if goal_handle.get_comm_state() == 7:
-    #         rospy.loginfo(str(index) + ": Goal is DONE by pick action server" )
+    #         rospy.loginfo(str(index) + ": PL Goal is DONE")
     #         rospy.loginfo(goal_handle.get_terminal_state())
-    #
-    #
-    #
+
+
+
     #         # get_result() gets the result produced by the Action Server
     #         result = goal_handle.get_result()
     #         rospy.loginfo(result)
-    #
-    #
-    #
-    #
+
+
+
+
     #         if (result.success == True):
-    #             self._goal_handles2.pop(index)
-    #             self._goal_info.pop(index)
-    #             if result.state==0:
-    #
-    #                 res=json.loads(result.result)
-    #                 sen = msgPickPlaceResult()
-    #                 for i in res:
-    #
-    #                     sen.result = json.dumps(res[i])
-    #                     sen.success = True
-    #                     sen.state = 0
-    #                     self.send_goal_iot(sen)
-    #
-    #             else:
-    #
-    #                 rospy.loginfo("Goal successfully completed by pick action server. Client Goal Handle #: " + str(index))
-    #                 y = sorted(self._goal_handles2)
-    #                 if self._goal_handles2 != {}:
-    #                     self.send_goal_pick_place(self._goal_info[y[0]])
-    #                 self.send_goal_place(result)
-    #                 self.send_goal_iot(result)
-    #
+
+
+
+
+    #             rospy.loginfo("Goal successfully completed PL. Client Goal Handle #: " + str(index))
+
+    #             self.send_goal_iot(result)
+
     #         else:
     #             rospy.loginfo("Goal failed. Client Goal Handle #: " + str(index))
-
-            #rospy.sleep(5)
-    def send_goal_place(self,msg):
-
-        goal = msgPickPlaceGoal()
-        print('msg in send_goal_place', msg)
-        goal.message = msg.result
-
-        goal_handle=self._ac3.send_goal(goal,self.on_transition3,None)
-        self.count3 = self.count3 + 1
-        self._goal_handles3.update({str(self.count3):goal_handle})
-
-    def on_transition3(self,goal_handle):
-
-        result = msgPickPlaceResult()
-
-        index = 0
-        for i in self._goal_handles3:
-            if self._goal_handles3[i] == goal_handle:
-                index = i
-                break
-
-        rospy.loginfo("Transition Callback. from place action Client Goal Handle #: " + str(index))
-        rospy.loginfo("Comm. State:PL " + str(goal_handle.get_comm_state()) )
-        rospy.loginfo("Goal Status:PL " + str(goal_handle.get_goal_status()) )
-
-        # Comm State - Monitors the State Machine of the Client which is different from Server's
-        # Comm State = 2 -> Active
-        # Comm State = 3 -> Wating for Result
-        # Comm State = 7 -> Done
-
-        # if (Comm State == ACTIVE)
-        if goal_handle.get_comm_state() == 2:
-            rospy.loginfo(str(index) + ": PL Goal just went active.")
-
-        # if (Comm State == DONE)
-        if goal_handle.get_comm_state() == 7:
-            rospy.loginfo(str(index) + ": PL Goal is DONE")
-            rospy.loginfo(goal_handle.get_terminal_state())
-
-
-
-            # get_result() gets the result produced by the Action Server
-            result = goal_handle.get_result()
-            rospy.loginfo(result)
-
-
-
-
-            if (result.success == True):
-
-
-
-
-                rospy.loginfo("Goal successfully completed PL. Client Goal Handle #: " + str(index))
-
-                self.send_goal_iot(result)
-
-            else:
-                rospy.loginfo("Goal failed. Client Goal Handle #: " + str(index))
-
-
-
-
-
-
-
-
 
 if __name__ == '__main__':
     x=ActionClient()
